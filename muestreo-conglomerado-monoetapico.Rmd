@@ -1,0 +1,1556 @@
+---
+title: "Muestreo por conglomerados monoetapico"
+author: "Hernan Perci Nuñez Palomino"
+date: "Ultima edicion `r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  pdf_document:
+    toc: yes
+    fig_caption: yes
+    number_sections: yes
+---
+
+\listoffigures
+\listoftables
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Introduccion
+
+Mediante el Decreto de Urgencia Nº 055-2011 del 14 de octubre de 2011, se declara de interés y de prioridad nacional el levantamiento del IV Censo Nacional Agropecuario (IV CENAGRO) y se encarga al Instituto Nacional de Estadística e Informática (INEI) su ejecución. El Ministerio de Agricultura y el Instituto Nacional de Estadística e Informática efectuarán de manera conjunta su planeamiento, organización y dirección.
+
+El IV CENAGRO, constituye una de las fuentes de información estadística más importantes,
+dado que proporciona datos actualizados para el mejor conocimiento de la estructura agraria del país. La conformación de la estructura agraria obtenida mediante el IV CENAGRO, conjuntamente con la que mide la dinámica productiva, permitirá la formulación de planes de desarrollo y la adopción de políticas que coadyuven a mejorar el nivel de vida de la población vinculada a las actividades agropecuarias.
+
+En ese marco, se ha elaborado el Programa Censal, que es un documento de carácter técnico
+cuyo contenido está relacionado con los temas y variables a investigarse; las mismas que se han seleccionado en función a los requerimientos y propuestas de los usuarios públicos y privados. Cabe indicar, que la temática censal que contiene el documento es concordante con las variables que requiere el Sector Agrario para la formulación de las políticas, planes y programas de desarrollo.
+
+
+# Diseño de la investigacion
+
+El uso de la tierra es el modo en que se aprovecha los terrenos de la unidad agropecuaria.
+La información sobre el uso de la tierra se tomará por parcelas e incluye la superficie total de la unidad agropecuaria, efectivamente aprovechada o no para la producción. La tierra se clasifica según se indica a continuación:
+
+1. Superficie Agrícola
+    + Tierras de labranza
+    + Tierras dedicadas a cultivos permanentes
+2. Tierras con pastos naturales
+3. Tierras con montes y bosques
+4. Tierras dedicadas a otros usos 
+
+Las tierras con pastos naturales son las tierras cubiertas por pastos que han crecido de modo natural, pueden ser manejadas por el hombre y estar utilizadas o no para el pastoreo de ganado.
+
+![pastos naturales](pastos naturales.jpg)
+
+## Objetivo General 
+
+Estimar las principales características de las superficies con pastos naturales de la región de Apurímac, durante el CENAGRO -2012 aplicando el muestreo de conglomerado monoetápico. 
+Comparar los resultados de las estimaciones encontradas a través de distintas técnicas de muestreo de conglomerado monoetápico. 
+
+## Objetivo Especifico
+
+1. Estimar la superficie total cubierta con pastos naturales mediante las distintas tecnicas de muestreo. 
+2. Estimar la superficie promedio cubierta con pastos naturales mediante las distintas tecnicas de muestreo.
+3. Comparar las  técnicas de muestreo monoetápico.
+
+
+![Provincias de la region de Apurimac](mapa_apurimac.png)
+
+
+## Variable de estudio
+
+Variable                  | Definicion           | Tipo
+--------                  | ----------           | ----
+Y: Área de las tierras con pastos naturales(has) | Área de las tierras con pastos naturales que le pertenece al productor agropecuario en el año 2012. | Cuantitativa continua (hectareas)
+
+Table: Caracteristicas de la variable de estudio
+
+## Poblacion objetivo
+
+Los productores agropecuarios ubicados en la región de Apurímac para el CENAGRO 2012.
+
+## Poblacion muestreada
+
+Los 9125 productores agropecuarios ubicados en las 78 de los 80 distritos en la región de Apurímac para el CENAGRO 2012.
+
+## Marco Muestral
+
+Los 9125 productores agropecuarios ubicados en las 78 de los 80 distritos en la región de Apurímac para el CENAGRO 2012.
+
+## Unidad de Muestreo
+
+Cada uno de los distritos en la región de Apurímac para el CENAGRO 2012.
+
+
+# Librerias del programa R usados
+
+
+```{r}
+
+library(tidyverse)
+library(haven)
+library(knitr)
+library(ggthemes)
+library(SDaA)
+library(openxlsx)
+
+```
+
+
+# Base de datos
+
+```{r}
+
+base_de_datos <- read_sav("01_IVCENAGRO_REC01.sav")
+
+```
+
+
+```{r}
+
+base_de_datos$ubigeo_distrito <- paste(base_de_datos$P001,
+                                       base_de_datos$P002,
+                                       base_de_datos$P003, sep = "")
+
+```
+
+
+```{r}
+
+data_elemento <- tibble(Distrito = base_de_datos$ubigeo_distrito,
+                       Yij = base_de_datos$WSUP14)
+
+data_elemento <- data_elemento %>%
+  filter(Yij > 0)
+summary(data_elemento)
+
+```
+
+
+Se seleccionan los registros comprendidos entre el primer y tercer cuartil.
+
+```{r}
+
+data_elemento <- data_elemento %>%
+  filter(Yij > 0.07, Yij < 0.6)
+
+```
+
+
+Se convierte la variable provincia de **character a un formato factor** para usarlo como conglomerados.
+
+```{r}
+
+data_elemento$Distrito <- as_factor(data_elemento$Distrito)
+glimpse(data_elemento)
+
+```
+
+
+```{r}
+
+kable(head(data_elemento),
+      align = "cc",
+      caption = "Hectareas de pastos naturales
+      en la region de Apurímac (6 primeros registros)")
+
+```
+
+
+
+```{r, fig.cap = "Grafico de la seleccion de la data de trabajo"}
+ggplot(base_de_datos, aes(x = WSUP14)) +
+  geom_density() +
+  geom_rug(sides = "bl") +
+    annotate(
+    "text",
+    x = 0.04, y = 0.02,
+    label = "0.07",
+    vjust = 1, size = 4, color = "red"
+  ) +
+    annotate(
+    "text",
+    x = 0.04, y = 0.2,
+    label = "25%",
+    vjust = 1, size = 4, color = "blue"
+  ) +
+    annotate(
+    "text",
+    x = 0.2, y = 0.2,
+    label = "50%",
+    vjust = 1, size = 8, color = "red"
+  ) +
+    annotate(
+    "text",
+    x = 1, y = 0.2,
+    label = "25%",
+    vjust = 1, size = 4, color = "blue"
+  ) +
+    annotate(
+    "text",
+    x = 1, y = 0.02,
+    label = "0.6",
+    vjust = 1, size = 4, color = "red"
+  ) +
+
+  geom_vline(xintercept = 0.07, color = "red") +
+  geom_vline(xintercept = 0.6, color = "red") +
+  labs(x = "Pastos naturales por unidad agropecuaria(has)") +
+  scale_x_log10() +
+  theme_stata()
+             
+```
+
+
+Para que cumpla con la variable auxiliar Mi solo se tomo en cuenta los registros comprendidos entre el primer y tercer cuartil
+
+```{r, fig.cap = "Grafico de densidad de hectareas de pastos naturales"}
+ggplot(data_elemento, aes(x = Yij)) +
+  geom_density() +
+  geom_rug(sides = "bl") +
+  labs(x = "Pastos naturales por unidad agropecuaria(has)") +
+  theme_stata()
+             
+```
+
+
+## Tratamiento de la variable de trabajo
+
+Agrupamos por distrito para representar la data a nivel de conglomerado.
+
+```{r}
+
+data_conglomerado <-
+  data_elemento %>%
+  group_by(Distrito) %>%
+  mutate(Mi = n(), Yi = sum(Yij), Yi_prom = mean(Yij)) %>%
+  select(-Yij) %>%
+  unique()
+
+data_conglomerado <-
+  data_conglomerado %>%
+  mutate(pi = Mi / sum(data_conglomerado$Mi), 
+         zi = Yi / pi)
+
+```
+
+
+```{r}
+
+kable(head(data_conglomerado),
+      align = "ccc",
+      caption = "Hectareas de pastos naturales 
+      en la region de Apurímac por conglomerado (6 primeros registros)")
+
+```
+
+
+```{r, fig.cap = "Grafico de densidad de hectareas de pastos naturales por distrito"}
+ggplot(data_conglomerado, aes(x = Yi)) +
+  geom_density() +
+  geom_rug(sides = "bl") +
+  labs(x = "Pastos naturales por unidad agropecuaria(has)") +
+  theme_stata()
+             
+```
+
+
+```{r, fig.cap = "Grafico de densidad de registros de pastos naturales por distrito"}
+ggplot(data_conglomerado, aes(x = Mi)) +
+  geom_density() +
+  geom_rug(sides = "bl") +
+  labs(x = "Numero de registros de pastos naturales por distrito") +
+  theme_stata()
+             
+```
+
+
+
+```{r}
+
+bases_de_datos <- function(variables) {
+  
+  base_de_datos_2 <-
+  base_de_datos %>%
+  filter(WSUP14 > 0.07, WSUP14 < 0.6)
+
+write.table(base_de_datos_2,
+            file="base de datos final.csv", sep = ";", row.names = FALSE)
+
+write.table(data_elemento,
+            file="data por elemento.csv", sep = ";", row.names = FALSE)
+
+write.table(data_conglomerado,
+            file="data por conglomerado.csv", sep = ";", row.names = FALSE)
+    
+}
+
+bases_de_datos()
+
+```
+
+
+# Tecnica PPT cr para los conglomerados
+
+## Analisis de la variable auxiliar
+
+\[\mathop H\nolimits_0 :\mathop \beta \nolimits_0  = 0\]
+\[\mathop H\nolimits_1 :\mathop \beta \nolimits_0  \ne 0\]
+
+```{r}
+
+modelo_lineal <- lm(formula = Yi ~ Mi, 
+                    data = data_conglomerado)
+
+kable(summary(modelo_lineal)$coef,
+      digits = 4,
+      align = "cccc",
+      caption = "Tabla de resultados del analisis
+      de coeficientes")
+
+```
+
+
+Con un p_valor mayor al nivel de significancia (0.0513 > 0.05) no hay evidencia suficiente para rechazar la hipotesis nula.
+
+```{r, fig.cap = "Diagrama de dispersion y recta de regresion"}
+ggplot(data_conglomerado, aes(y = Yi, x = Mi)) +
+  geom_jitter(alpha = 0.3) +
+  geom_smooth(method = "lm") +
+  labs(x = "Mi = variable auxiliar",
+       y = "Yi = Total de Pastos naturales por distrito(has)") +
+  theme_stata()
+             
+```
+
+
+## Tamaño de muestra mediante el coeficiente de variacion
+
+\[n \ge \frac{{\mathop M\nolimits_0 \sum\nolimits_{i = 1}^N {\mathop M\nolimits_i } {{\left( {\frac{{\mathop Y\nolimits_i }}{{\mathop M\nolimits_i }} - \frac{Y}{{\mathop M\nolimits_0 }}} \right)}^2}}}{{{{\left( {\mathop a\nolimits_0 Y} \right)}^2}}}\]
+
+
+```{r}
+
+coef_var <- function() {
+  a0 <- c(NULL)
+  k <- 0.01
+  
+  for (i in 1:20) {
+    a0[i] <- k
+    k <- k + 0.01
+  }
+  a0
+}
+
+a0 <- coef_var()
+
+```
+
+
+```{r}
+
+tamano_de_muestra_ppt_cr <- function(coeficiente) {
+  sumatoria <- c(NULL)
+    for (i in 1:nrow(data_conglomerado)) {
+      sumatoria[i] <-
+      data_conglomerado$Mi[i] * 
+        ((data_conglomerado$Yi[i] /
+            data_conglomerado$Mi[i]) -
+           (sum(data_conglomerado$Yi) /
+              sum(data_conglomerado$Mi)))^2
+    }
+  numerador <- sum(data_conglomerado$Mi) * sum(sumatoria)
+  denominador <- (coeficiente * sum(data_conglomerado$Yi))^2
+  n <- numerador / denominador
+  tabla <- tibble(a0 = coeficiente, n, n_PPTcr = ceiling(n))
+  tabla
+}
+
+tabla_tamano_de_muestra_ppt_cr <- tamano_de_muestra_ppt_cr(coeficiente = a0)
+kable(tabla_tamano_de_muestra_ppt_cr, 
+      align = "ccc", 
+      caption = "Tamaño de muestra PPTcr con respecto al coeficiente de variacion")
+
+```
+
+
+```{r, fig.cap = "Grafico del tamano de muestra en el PPTcr"}
+ggplot(tabla_tamano_de_muestra_ppt_cr, aes(x = a0, y = n_PPTcr)) +
+  geom_label(aes(label = n_PPTcr), colour = "blue", fontface = "bold") +
+  geom_line() +
+    annotate(
+    "text",
+    x = 0.1, y = 78,
+    label = "78 = Numero de conglomerados en la poblacion",
+    vjust = 1, size = 3, color = "red"
+  ) +
+  geom_hline(yintercept = 78, color = "red") +
+  labs(x = "a0 = coeficiente de variacion",
+       y = "n = Tamano de la muestra") +
+  theme_stata()
+             
+```
+
+
+##  Metodo de lahiri
+
+```{r}
+
+# Lahiri, D. B. (1951). A method of sample selection providing unbiased ratio estimates
+# Bulletin of the International Statistical Institute, 33: 133 – 140.
+# Original code from Sharon Lohr (1999), p. 452 – 453.
+
+seleccion_lahiri_ppt_cr <- function(relsize, n, clnames = seq(along = relsize)){
+  set.seed(123)
+  maxrel <- max(relsize)
+  sizeratio <- maxrel / mean(relsize)
+  numpsu <- length(relsize)
+  size <- 0
+  clusters <- NULL
+  while (size < n){
+    ss <- ceiling((n - size) * sizeratio)
+    temp <- sample(1:numpsu, ss, replace = TRUE)
+    temp1 <- clnames[temp[relsize[temp] > runif(ss, min = 0, max = maxrel)]]
+    clusters <- append(clusters, temp1[!is.na(temp1)])
+    size <- length(clusters)
+  }
+  clusters[1:n]
+}
+
+```
+
+
+## Total estimado
+
+\[\mathop Y\limits^ \wedge   = \frac{{{\rm{ }}{M_0}}}{n}S\left( {\frac{{{\rm{ }}{y_i}}}{{{\rm{ }}{M_i}}}} \right)\]
+
+
+```{r}
+
+total_est_PPTcr <- function(data, n = nrow(data)) {
+  sumatoria <- c(NULL)
+  for (i in 1:n) {
+    sumatoria[i] <- data$Yi[i] / data$pi[i]
+  }
+  total_est <- sum(sumatoria) / n
+  total_est
+}
+
+```
+
+
+## Media muestral por elemento
+
+\[\mathop {\mathop {\bar Y}\nolimits_e }\limits^ \wedge   = \frac{{\mathop Y\limits^ \wedge  }}{{\mathop M\nolimits_0 }}\]
+
+```{r}
+
+med_mues_ele_PPTcr <- function(data) {
+  media_muestral_por_elemento <- total_est_PPTcr(data) / sum(data_conglomerado$Mi)
+}
+
+```
+
+
+## Estimacion de la varianza de la media muestral por elemento
+
+\[\mathop {V(\mathop {{{\bar Y}_e}}\limits^ \wedge  )}\limits^ \wedge   = \frac{1}{{\mathop M\nolimits_0^2 n}}\frac{{S{{\left( {\mathop z\nolimits_i  - \bar z} \right)}^2}}}{{n - 1}}\]
+
+```{r}
+
+est_var_med_mues_el_pptcr <- function(data, n = nrow(data)) {
+  promedio <- mean(data$zi)
+  sumatoria <- c(NULL)
+  for (i in 1:n) {
+    sumatoria[i] <- (data$zi[i] - promedio)^2
+  }
+  est_var <- sum(sumatoria) / ((sum(data_conglomerado$Mi)^2) * n * (n - 1))
+  est_var
+}
+
+```
+
+
+## Estimacion de la varianza del total estimado
+
+\[\mathop {V(\mathop Y\limits^ \wedge  )}\limits^ \wedge   = \frac{1}{n}\frac{{S{{\left( {\mathop z\nolimits_i  - \bar z} \right)}^2}}}{{n - 1}}\]
+
+```{r}
+
+est_var_total_est_PPTcr <- function(data) {
+  est_var <- (sum(data_conglomerado$Mi)^2) * 
+              est_var_med_mues_el_pptcr(data, n = nrow(data))
+  est_var
+}
+
+```
+
+
+## Seleccion de las muestras
+
+```{r}
+
+data_muestra_PPTcr <- function(n) {
+  indice_PPTcr <-
+  seleccion_lahiri_ppt_cr(relsize = 
+  data_conglomerado$Mi,
+  n = n)
+
+  data_PPTcr <- data_conglomerado[indice_PPTcr,]
+
+}
+
+```
+
+
+## Resultados PPTcr
+
+```{r}
+
+data_10_PPTcr <- data_muestra_PPTcr(n = 10)
+data_3_PPTcr <- data_muestra_PPTcr(n = 3)
+data_2_PPTcr <- data_muestra_PPTcr(n = 2)
+
+```
+
+
+```{r}
+
+estimaciones_PPTcr <- function(data) {
+  tibble(total_est = total_est_PPTcr(data),
+        media_ele_est =med_mues_ele_PPTcr(data),
+        var_media_est = est_var_med_mues_el_pptcr(data),
+        var_total_est= est_var_total_est_PPTcr(data))
+}
+
+```
+
+
+```{r}
+
+estimaciones_data_10_PPTcr <- estimaciones_PPTcr(data = data_10_PPTcr)
+estimaciones_data_3_PPTcr <- estimaciones_PPTcr(data = data_3_PPTcr)
+estimaciones_data_2_PPTcr <- estimaciones_PPTcr(data = data_2_PPTcr)
+
+```
+
+
+## Intervalo de confianza
+
+
+\[\langle \mathop {{{\bar Y}_e}}\limits^ \wedge   \pm \mathop t\nolimits_{(1 - {\alpha  \mathord{\left/
+ {\vphantom {\alpha  2}} \right.
+ \kern-\nulldelimiterspace} 2};n - 1)} \sqrt {\mathop {V(\mathop {{{\bar Y}_e}}\limits^ \wedge  )}\limits^ \wedge  } \rangle \]
+
+
+
+```{r}
+
+tabla_IC_media_PPTcr <- 
+  tibble(a0 = c(0.05, 0.10, 0.15),
+  n = c(10, 3, 2),
+  m0 = c(sum(data_10_PPTcr$Mi),
+         sum(data_3_PPTcr$Mi),
+         sum(data_2_PPTcr$Mi)),
+  media_ele = c(mean(data_elemento$Yij), 
+                mean(data_elemento$Yij), 
+                mean(data_elemento$Yij)),
+  media_ele_est = as.numeric(c(estimaciones_data_10_PPTcr[2],
+                               estimaciones_data_3_PPTcr[2],
+                               estimaciones_data_2_PPTcr[2])),
+  desv_media_est = sqrt(as.numeric(c(estimaciones_data_10_PPTcr[3],
+                                     estimaciones_data_3_PPTcr[3],
+                                     estimaciones_data_2_PPTcr[3]))))
+
+tabla_IC_media_PPTcr <-
+  tabla_IC_media_PPTcr %>%
+  mutate(IC_inferior = media_ele_est - 
+           (qt(p = 1-(0.05/2), df = n-1) * desv_media_est),
+         IC_superior = media_ele_est + 
+           (qt(p = 1-(0.05/2), df = n-1) * desv_media_est),
+         coef_var_est = desv_media_est / media_ele_est)
+
+kable(tabla_IC_media_PPTcr)
+
+```
+
+
+\[\langle \mathop {{\rm{ }}Y}\limits^ \wedge   \pm \mathop t\nolimits_{(1 - {\alpha  \mathord{\left/
+ {\vphantom {\alpha  2}} \right.
+ \kern-\nulldelimiterspace} 2};n - 1)} \sqrt {\mathop {V(\mathop {{\rm{ }}Y}\limits^ \wedge  )}\limits^ \wedge  } \rangle \]
+
+
+
+```{r}
+
+tabla_IC_total_PPTcr <- 
+  tibble(a0 = c(0.05, 0.10, 0.15),
+  n = c(10, 3, 2),
+  m0 = c(sum(data_10_PPTcr$Mi),
+         sum(data_3_PPTcr$Mi),
+         sum(data_2_PPTcr$Mi)),
+  total = c(sum(data_conglomerado$Yi), 
+            sum(data_conglomerado$Yi), 
+            sum(data_conglomerado$Yi)),
+  total_est = as.numeric(c(estimaciones_data_10_PPTcr[1],
+                           estimaciones_data_3_PPTcr[1],
+                           estimaciones_data_2_PPTcr[1])),
+  desv_total_est = sqrt(as.numeric(c(estimaciones_data_10_PPTcr[4],
+                                     estimaciones_data_3_PPTcr[4],
+                                     estimaciones_data_2_PPTcr[4]))))
+
+tabla_IC_total_PPTcr <-
+  tabla_IC_total_PPTcr %>%
+  mutate(IC_inferior = total_est - 
+           (qt(p = 1-(0.05/2), df = n-1) * desv_total_est),
+         IC_superior = total_est + 
+           (qt(p = 1-(0.05/2), df = n-1) * desv_total_est),
+         coef_var_est = desv_total_est / total_est)
+
+kable(tabla_IC_total_PPTcr)
+
+```
+
+
+# Tecnica MASsr para los conglomerados
+
+## Cuasivarianza poblacional
+
+\[{S_y}^2 = \frac{1}{{N - 1}} * {\sum\limits_{i = 1}^N {\left( {{M_{_i}} * {{\bar Y}_i} - \sum\limits_{i = 1}^N {\frac{{{M_i} * {{\bar Y}_i}}}{N}} } \right)} ^2}\]
+
+```{r}
+
+cuasivarianza_MASsr <- function(data) {
+  promedio <- mean(data$Yi)
+  sumatoria <- c(NULL)
+  for (i in 1:nrow(data)) {
+    sumatoria[i] <- (data$Yi[i] - 
+                       promedio)^2
+  }
+  cuasivarianza <- sum(sumatoria) / (nrow(data) - 1)
+  cuasivarianza
+}
+
+
+```
+
+
+## Tamaño de muestra mediante el coeficiente de variacion
+
+\[n \ge \frac{{{N^2}{S_y}^2}}{{a_0^2*{Y^2} + N{S_y}^2}}\]
+
+```{r}
+
+tamano_de_muestra_MASsr <- function(coeficiente) {
+  CuasiPob <- cuasivarianza_MASsr(data_conglomerado)
+  numerador <- (nrow(data_conglomerado)^2) * CuasiPob
+  denominador <- ((coeficiente^2)*(sum(data_conglomerado$Yi)^2)) + 
+  (nrow(data_conglomerado)*CuasiPob)
+  n <- numerador / denominador
+  tabla <- tibble(a0 = coeficiente, n, n_MASsr = ceiling(n))
+  tabla  
+}
+
+
+tabla_tamano_de_muestra_MASsr <- tamano_de_muestra_MASsr(coeficiente = a0)
+kable(tabla_tamano_de_muestra_MASsr, 
+      align = "ccc", 
+      caption = "Tamaño de muestra MASsr con respecto al coeficiente de variacion")
+
+```
+
+
+```{r, fig.cap = "Grafico del tamano de muestra en el MASsr"}
+ggplot(tabla_tamano_de_muestra_MASsr, aes(x = a0, y = n_MASsr)) +
+  geom_label(aes(label = n_MASsr), colour = "blue", fontface = "bold") +
+  geom_line() +
+  geom_hline(yintercept = 78, color = "red") +
+    annotate(
+    "text",
+    x = 0.1, y = 78,
+    label = "78 = Numero de conglomerados en la poblacion",
+    vjust = 1, size = 3, color = "red"
+  ) +
+  labs(x = "a0 = coeficiente de variacion",
+       y = "n = Tamano de la muestra") +
+  theme_stata()
+             
+```
+
+
+## Total estimado MASsr
+
+\[\hat Y = \frac{N}{n}\mathop S\limits_{i = 1}^n {y_i}\]
+
+```{r}
+
+total_est_MASsr <- function(data) {
+
+  total_est <- mean(data$Yi) * nrow(data_conglomerado)
+  total_est
+}
+```
+
+
+## Media estimada por elementos MASsr
+
+\[{\hat \bar Y_e} = \frac{{\hat Y}}{{{M_0}}}\]
+
+```{r}
+
+med_mues_ele_MASsr <- function(data) {
+  media_muestral_por_elemento <- total_est_MASsr(data) / sum(data_conglomerado$Mi)
+}
+
+```
+
+
+## Estimada de la varianza de la media por elemento estimado
+
+\[\mathop {V(\mathop {{{\bar Y}_e}}\limits^ \wedge  )}\limits^ \wedge   = \frac{{{N^2}}}{{{\rm{ }}M_0^2n}}\left( {1 - \frac{n}{N}} \right)\frac{{S{{\left( {{\rm{ }}{{\rm{y}}_i} - \bar y} \right)}^2}}}{{n - 1}}\]
+
+```{r}
+
+est_var_med_mues_el_MASsr <- function(data, n = nrow(data), N = nrow(data_conglomerado)) {
+
+  a <- (N^2) / (n*(sum(data_conglomerado$Mi)^2))
+  b <- 1 - (n / N)
+  c <- cuasivarianza_MASsr(data)
+  est_var <- a * b * c
+  est_var
+  
+}
+
+```
+
+
+## Estimacion de la varianza del total estimado
+
+\[\mathop {V\left( {\hat Y} \right)}\limits^ \wedge   = M_0^2 * \mathop {V(\mathop {{{\bar Y}_e}}\limits^ \wedge  )}\limits^ \wedge  \]
+
+```{r}
+
+est_var_total_est_MASsr <- function(data) {
+  est_var <- (sum(data_conglomerado$Mi)^2) * 
+              est_var_med_mues_el_MASsr(data, n = nrow(data))
+  est_var
+}
+
+```
+
+
+## Seleccion de las muestras
+
+```{r}
+
+data_muestra_MASsr <- function(n, N = nrow(data_conglomerado)) {
+  
+  set.seed(123)
+  indice_MASsr <- sample(1:N, size = n, replace = FALSE)
+  data_MASsr <- data_conglomerado[indice_MASsr,1:3]
+
+data_MASsr
+
+}
+
+```
+
+
+## Resultados MASsr
+
+```{r}
+
+data_69_MASsr <- data_muestra_MASsr(n = 69)
+data_50_MASsr <- data_muestra_MASsr(n = 50)
+data_35_MASsr <- data_muestra_MASsr(n = 35)
+
+```
+
+
+```{r}
+
+estimaciones_MASsr <- function(data) {
+  tibble(total_est = total_est_MASsr(data),
+        media_ele_est =med_mues_ele_MASsr(data),
+        var_media_est = est_var_med_mues_el_MASsr(data),
+        var_total_est= est_var_total_est_MASsr(data))
+}
+
+```
+
+
+```{r}
+
+estimaciones_data_69_MASsr <- estimaciones_MASsr(data = data_69_MASsr)
+estimaciones_data_50_MASsr <- estimaciones_MASsr(data = data_50_MASsr)
+estimaciones_data_35_MASsr <- estimaciones_MASsr(data = data_35_MASsr)
+
+```
+
+
+## Intervalo de confianza
+
+
+\[\langle \mathop {{{\bar Y}_e}}\limits^ \wedge   \pm \mathop t\nolimits_{(1 - {\alpha  \mathord{\left/
+ {\vphantom {\alpha  2}} \right.
+ \kern-\nulldelimiterspace} 2};n - 1)} \sqrt {\mathop {V(\mathop {{{\bar Y}_e}}\limits^ \wedge  )}\limits^ \wedge  } \rangle \]
+
+
+
+```{r}
+
+tabla_IC_media_MASsr <- 
+  tibble(a0 = c(0.05, 0.10, 0.15),
+  n = c(69, 50, 35),
+  m0 = c(sum(data_69_MASsr$Mi),
+         sum(data_50_MASsr$Mi),
+         sum(data_35_MASsr$Mi)),
+  media_ele = c(mean(data_elemento$Yij), 
+                mean(data_elemento$Yij), 
+                mean(data_elemento$Yij)),
+  media_ele_est = as.numeric(c(estimaciones_data_69_MASsr[2],
+                               estimaciones_data_50_MASsr[2],
+                               estimaciones_data_35_MASsr[2])),
+  desv_media_est = sqrt(as.numeric(c(estimaciones_data_69_MASsr[3],
+                                     estimaciones_data_50_MASsr[3],
+                                     estimaciones_data_35_MASsr[3]))))
+
+tabla_IC_media_MASsr <-
+  tabla_IC_media_MASsr %>%
+  mutate(IC_inferior = media_ele_est - 
+           (qnorm(p = 1-(0.05/2)) * desv_media_est),
+         IC_superior = media_ele_est + 
+           (qnorm(p = 1-(0.05/2)) * desv_media_est),
+         coef_var_est = desv_media_est / media_ele_est)
+
+kable(tabla_IC_media_MASsr)
+
+```
+
+
+\[\langle \mathop {{\rm{ }}Y}\limits^ \wedge   \pm \mathop t\nolimits_{(1 - {\alpha  \mathord{\left/
+ {\vphantom {\alpha  2}} \right.
+ \kern-\nulldelimiterspace} 2};n - 1)} \sqrt {\mathop {V(\mathop {{\rm{ }}Y}\limits^ \wedge  )}\limits^ \wedge  } \rangle \]
+
+
+
+```{r}
+
+tabla_IC_total_MASsr <- 
+  tibble(a0 = c(0.05, 0.10, 0.15),
+  n = c(69, 50, 35),
+  m0 = c(sum(data_69_MASsr$Mi),
+         sum(data_50_MASsr$Mi),
+         sum(data_35_MASsr$Mi)),
+  total = c(sum(data_conglomerado$Yi), 
+            sum(data_conglomerado$Yi), 
+            sum(data_conglomerado$Yi)),
+  total_est = as.numeric(c(estimaciones_data_69_MASsr[1],
+                           estimaciones_data_50_MASsr[1],
+                           estimaciones_data_35_MASsr[1])),
+  desv_total_est = sqrt(as.numeric(c(estimaciones_data_69_MASsr[4],
+                                     estimaciones_data_50_MASsr[4],
+                                     estimaciones_data_35_MASsr[4]))))
+
+tabla_IC_total_MASsr <-
+  tabla_IC_total_MASsr %>%
+  mutate(IC_inferior = total_est - 
+           (qnorm(p = 1-(0.05/2)) * desv_total_est),
+         IC_superior = total_est + 
+           (qnorm(p = 1-(0.05/2)) * desv_total_est),
+         coef_var_est = desv_total_est / total_est)
+
+kable(tabla_IC_total_MASsr)
+
+```
+
+
+# Tecnica de media de medias con el MASsr para conglomerados
+
+## Cuasivarianza poblacional de y promedio
+
+```{r}
+
+cuasivarianza_MediaMed <- function(data, n = nrow(data)) {
+  promedio <- mean(data_conglomerado$Yi_prom)
+  sumatoria <- c(NULL)
+  for (i in 1:n) {
+    sumatoria[i] <- (data$Yi_prom[i] - 
+                       promedio)^2
+  }
+  cuasivarianza <- sum(sumatoria) / (n - 1)
+  cuasivarianza
+}
+
+```
+
+
+## Total estimado
+
+\[{\hat Y_1} = {M_0}\frac{{S{{\bar y}_i}}}{n}\]
+
+```{r}
+
+total_est_MediaMed <- function(data) {
+
+  total_est <- mean(data$Yi_prom) * sum(data_conglomerado$Mi)
+  total_est
+}
+
+```
+
+
+## Media estimada por elementos
+
+\[{\hat \bar Y_{e1}} = \frac{{{{\hat Y}_1}}}{{{M_0}}}\]
+
+```{r}
+
+med_mues_ele_MediaMed <- function(data) {
+  media_muestral_por_elemento <- total_est_MediaMed(data) / sum(data_conglomerado$Mi)
+}
+
+```
+
+
+## Estimada de la varianza  de la media por elemento estimado
+
+\[\mathop {V({{\hat \bar Y}_{e1}})}\limits^ \wedge   = \left( {\frac{1}{n} - \frac{1}{N}} \right)s_{\bar y}^2\]
+
+```{r}
+
+est_var_med_mues_el_MediaMed <- function(data, n = nrow(data), N = nrow(data_conglomerado)) {
+  
+  est_var <- ((1 / n) - (1 / N)) * cuasivarianza_MediaMed(data)
+  est_var 
+}
+
+```
+
+
+## Estimada de la varianza del total estimado
+
+\[\mathop {V\left( {{{\hat Y}_1}} \right)}\limits^ \wedge   = M_0^2 * \mathop {V(\mathop {{{\bar Y}_{e1}}}\limits^ \wedge  )}\limits^ \wedge  \]
+
+```{r}
+
+est_var_total_est_MediaMed <- function(data) {
+  est_var <- (sum(data_conglomerado$Mi)^2) * 
+              est_var_med_mues_el_MediaMed(data, n = nrow(data))
+  est_var
+}
+
+```
+
+
+## Analisis del sesgo del estimador
+
+```{r}
+
+sesgo_TotalEst_MediaMed <- function() {
+  M_raya <- sum(data_conglomerado$Mi) / nrow(data_conglomerado)
+  sumatoria <- c(NULL)
+  for (i in 1:nrow(data_conglomerado)) {
+    sumatoria[i] <- data_conglomerado$Yi_prom[i]*
+                     (M_raya - data_conglomerado$Mi[i])
+  }
+  sesgo <- sum(sumatoria)
+  sesgo
+}
+
+
+relacion_sesgo_desv <- function(n) {
+
+  numerador <- sesgo_TotalEst_MediaMed()
+  a <- sum(data_conglomerado$Mi)^2
+  b <- ((1 / n) - (1 / nrow(data_conglomerado)))
+  c <- cuasivarianza_MediaMed(data = data_conglomerado)
+  denominador <- a * b * c
+  relacion <- abs(numerador) / sqrt(denominador)
+  relacion
+}
+
+```
+
+
+## tamanio de muestra mediante el coeficiente de variacion
+
+```{r}
+
+tamano_de_muestra_MediaMed <- function(coeficiente) {
+  
+  M_raya <- sum(data_conglomerado$Mi) / nrow(data_conglomerado)
+  CuasiPob <- cuasivarianza_MediaMed(data = data_conglomerado)
+  numerador <- nrow(data_conglomerado) * CuasiPob * (sum(data_conglomerado$Mi)^2)
+  denominador_a <- nrow(data_conglomerado) * 
+                   ((coeficiente * M_raya * sum(data_conglomerado$Yi_prom))^2)
+  denominador_b <- (sum(data_conglomerado$Mi)^2) * CuasiPob
+  n <- numerador / (denominador_a + denominador_b)
+  
+  tabla <- tibble(a0 = coeficiente,
+                  n, n_MediaMed = ceiling(n),
+                  sesgo_sobre_desv = relacion_sesgo_desv(n))
+  tabla
+  
+}
+
+
+tabla_tamano_de_muestra_MediaMed <- tamano_de_muestra_MediaMed(coeficiente = a0)
+kable(tabla_tamano_de_muestra_MediaMed, 
+      align = "cccc", 
+      caption = "Tamaño de muestra MediaMed con respecto al coeficiente de variacion")
+
+```
+
+
+La relacion sesgo-desviacion estandar es mayor a 0.1 por lo cual se aconseja cambiar de tecnica de muestreo.
+
+```{r, fig.cap = "Grafico del tamano de muestra en Media de medias"}
+ggplot(tabla_tamano_de_muestra_MediaMed, aes(x = a0, y = n_MediaMed)) +
+  geom_label(aes(label = n_MediaMed), colour = "blue", fontface = "bold") +
+  geom_line() +
+  geom_hline(yintercept = 78, color = "red") +
+    annotate(
+    "text",
+    x = 0.1, y = 78,
+    label = "78 = Numero de conglomerados en la poblacion",
+    vjust = 1, size = 3, color = "red"
+  ) +
+  labs(x = "a0 = coeficiente de variacion",
+       y = "n = Tamano de la muestra") +
+  theme_stata()
+             
+```
+
+
+## Seleccion de las muestras
+
+```{r}
+
+data_muestra_MediaMed <- function(n, N = nrow(data_conglomerado)) {
+  
+  set.seed(123)
+  indice_MediaMed <- sample(1:N, size = n, replace = FALSE)
+  data_MediaMed <- data_conglomerado[indice_MediaMed,1:4]
+
+data_MediaMed
+
+}
+
+```
+
+
+## Resultados Media de medias
+
+```{r}
+
+data_15_MediaMed <- data_muestra_MediaMed(n = 15)
+data_5_MediaMed <- data_muestra_MediaMed(n = 5)
+data_2_MediaMed <- data_muestra_MediaMed(n = 2)
+
+```
+
+
+```{r}
+
+estimaciones_MediaMed <- function(data) {
+  tibble(total_est = total_est_MediaMed(data),
+        media_ele_est =med_mues_ele_MediaMed(data),
+        var_media_est = est_var_med_mues_el_MediaMed(data),
+        var_total_est= est_var_total_est_MediaMed(data))
+}
+
+```
+
+
+```{r}
+
+estimaciones_data_15_MediaMed <- estimaciones_MediaMed(data = data_15_MediaMed)
+estimaciones_data_5_MediaMed <- estimaciones_MediaMed(data = data_5_MediaMed)
+estimaciones_data_2_MediaMed <- estimaciones_MediaMed(data = data_2_MediaMed)
+
+```
+
+
+## Intervalo de confianza
+
+
+\[\langle \mathop {{{\bar Y}_{e1}}}\limits^ \wedge   - B\left( {\mathop {{{\bar Y}_{e1}}}\limits^ \wedge  } \right) \pm {t_{(1 - \alpha /2;n - 1)}}\sqrt {\mathop {V(\mathop {{{\bar Y}_{e1}}}\limits^ \wedge  )}\limits^ \wedge  } \rangle \]
+
+```{r}
+
+tabla_IC_media_MediaMed <- 
+  tibble(a0 = c(0.05, 0.10, 0.15),
+  n = c(15, 5, 2),
+  m0 = c(sum(data_15_MediaMed$Mi),
+         sum(data_5_MediaMed$Mi),
+         sum(data_2_MediaMed$Mi)),
+  media_ele = c(mean(data_elemento$Yij), 
+                mean(data_elemento$Yij), 
+                mean(data_elemento$Yij)),
+  media_ele_est = as.numeric(c(estimaciones_data_15_MediaMed[2],
+                               estimaciones_data_5_MediaMed[2],
+                               estimaciones_data_2_MediaMed[2])),
+  desv_media_est = sqrt(as.numeric(c(estimaciones_data_15_MediaMed[3],
+                                     estimaciones_data_5_MediaMed[3],
+                                     estimaciones_data_2_MediaMed[3]))))
+
+tabla_IC_media_MediaMed <-
+  tabla_IC_media_MediaMed %>%
+  mutate(IC_inferior = media_ele_est - 
+           (sesgo_TotalEst_MediaMed()/sum(data_conglomerado$Mi)) -
+           (qt(p = 1-(0.05/2), df = n - 1) * desv_media_est),
+         IC_superior = media_ele_est -
+           (sesgo_TotalEst_MediaMed()/sum(data_conglomerado$Mi)) + 
+           (qt(p = 1-(0.05/2), df = n - 1) * desv_media_est),
+         coef_var_est = desv_media_est / media_ele_est)
+
+kable(tabla_IC_media_MediaMed)
+
+```
+
+
+\[\langle \mathop {{Y_1}}\limits^ \wedge   - B(\mathop {{Y_1}}\limits^ \wedge  ) \pm {\rm{ }}{t_{(1 - \alpha /2;n - 1)}}\sqrt {\mathop {V(\mathop {{Y_1}}\limits^ \wedge  )}\limits^ \wedge  } \rangle \]
+
+```{r}
+
+tabla_IC_total_MediaMed <- 
+  tibble(a0 = c(0.05, 0.10, 0.15),
+  n = c(15, 5, 2),
+  m0 = c(sum(data_15_MediaMed$Mi),
+         sum(data_5_MediaMed$Mi),
+         sum(data_2_MediaMed$Mi)),
+  total = c(sum(data_conglomerado$Yi), 
+            sum(data_conglomerado$Yi), 
+            sum(data_conglomerado$Yi)),
+  total_est = as.numeric(c(estimaciones_data_15_MediaMed[1],
+                           estimaciones_data_5_MediaMed[1],
+                           estimaciones_data_2_MediaMed[1])),
+  desv_total_est = sqrt(as.numeric(c(estimaciones_data_15_MediaMed[4],
+                                     estimaciones_data_5_MediaMed[4],
+                                     estimaciones_data_2_MediaMed[4]))))
+
+tabla_IC_total_MediaMed <-
+  tabla_IC_total_MediaMed %>%
+  mutate(IC_inferior = total_est - sesgo_TotalEst_MediaMed() - 
+           (qt(p = 1-(0.05/2), df = n - 1) * desv_total_est),
+         IC_superior = total_est - sesgo_TotalEst_MediaMed() + 
+           (qt(p = 1-(0.05/2), df = n - 1) * desv_total_est),
+         coef_var_est = desv_total_est / total_est)
+
+kable(tabla_IC_total_MediaMed)
+
+```
+
+
+# Tecnica de razon para los conglomerados
+
+
+## Cuasivarianza de R estimado
+
+\[S_{\hat R}^2 = \frac{{\sum\nolimits_{i = 1}^n {{{\left( {{y_i} - \hat R{M_i}} \right)}^2}} }}{{n - 1}}\]
+
+
+```{r}
+
+cuasivarianza_Razon <- function(data, n = nrow(data)) {
+  r <- mean(data$Yi) / mean(data$Mi)
+  sumatoria <- c(NULL)
+  for (i in 1:n) {
+    sumatoria[i] <- (data$Yi[i] - 
+                       (r * data$Mi[i]))^2
+  }
+  cuasivarianza <- sum(sumatoria) / (n - 1)
+  cuasivarianza
+}
+
+```
+
+
+```{r}
+
+varianza_Razon_est <- function(n, N = nrow(data_conglomerado)) {
+  R <- sum(data_conglomerado$Yi) / sum(data_conglomerado$Mi)
+  sumatoria <- c(NULL)
+  for (i in 1:N) {
+    sumatoria[i] <- (data_conglomerado$Yi[i] - 
+                       (R * data_conglomerado$Mi[i]))^2
+  }
+  cuasivarianza <- sum(sumatoria) / (N - 1)
+  a <- 1 - (n / N)
+  b <- N * (mean(data_conglomerado$Mi)^2)
+  varianza <- a * cuasivarianza / b
+  varianza
+}
+
+```
+
+
+## Total estimado
+
+\[{\hat Y_2} = X\hat R = {M_0}\frac{{\sum\nolimits_{i = 1}^n {{y_i}} }}{{\sum\nolimits_{i = 1}^n {{M_i}} }}\]
+
+```{r}
+
+total_est_Razon <- function(data) {
+
+  total_est <- sum(data_conglomerado$Mi) * sum(data$Yi) / sum(data$Mi)
+  total_est
+  
+}
+
+```
+
+
+## Media estimada por elementos
+
+\[{\hat \bar Y_{e2}} = \frac{{{{\hat Y}_2}}}{{{M_0}}} = \frac{{\sum\nolimits_{i = 1}^n {{y_i}} }}{{\sum\nolimits_{i = 1}^n {{M_i}} }} = \hat R\]
+
+```{r}
+
+med_mues_ele_Razon <- function(data) {
+  media_muestral_por_elemento <- total_est_Razon(data) / sum(data_conglomerado$Mi)
+}
+
+```
+
+
+## Estimada de la varianza  de la media por elemento estimado
+
+\[\mathop {V\left( {{{\hat \bar Y}_{e2}}} \right)}\limits^ \wedge   = \frac{{{N^2}}}{{M_0^2}}\frac{{\left( {1 - f} \right)}}{n}\frac{{\sum\nolimits_{i = 1}^n {{{\left( {{y_i} - \hat R{M_i}} \right)}^2}} }}{{n - 1}}\]
+
+```{r}
+
+est_var_med_mues_el_Razon <- function(data, n = nrow(data), N = nrow(data_conglomerado)) {
+  
+  a <- ((N^2) / (sum(data_conglomerado$Mi)^2))
+  b <- ((1 / n) - (1 / N)) * cuasivarianza_Razon(data)
+  est_var <- a * b
+  est_var
+  
+}
+
+```
+
+
+## Estimada de la varianza del total estimado
+
+\[\mathop {V\left( {{{\hat Y}_2}} \right)}\limits^ \wedge   = \mathop {V\left( {{{\hat \bar Y}_{e2}}} \right)}\limits^ \wedge   * M_0^2\]
+
+```{r}
+
+est_var_total_est_Razon <- function(data) {
+  est_var <- (sum(data_conglomerado$Mi)^2) * 
+              est_var_med_mues_el_Razon(data)
+  est_var
+}
+
+```
+
+
+## tamanio de muestra mediante el coeficiente de variacion
+
+\[n \ge \frac{{NS_x^2}}{{a_0^2 * N{{\bar X}^2} + S_x^2}}\]
+
+```{r}
+
+tamano_de_muestra_Razon <- function(coeficiente) {
+  
+  promedio <- mean(data_conglomerado$Mi)
+  sumatoria <- c(NULL)
+  for (i in 1:nrow(data_conglomerado)) {
+    sumatoria[i] <- (data_conglomerado$Mi[i] - 
+                       promedio)^2
+  }
+  
+  CuasiPob_x <- sum(sumatoria) / (nrow(data_conglomerado) - 1)
+  M_raya <- sum(data_conglomerado$Mi) / nrow(data_conglomerado)
+
+  numerador <- nrow(data_conglomerado) * CuasiPob_x
+  denominador <- (nrow(data_conglomerado) * 
+                   ((coeficiente * M_raya)^2)) + CuasiPob_x
+  n <- numerador / denominador
+  
+  n_Razon <- ceiling(n)
+  
+  desv_x <- sqrt((1-(n_Razon / nrow(data_conglomerado))) * CuasiPob_x / n_Razon)
+  cv_x <- desv_x / promedio
+  
+  tabla <- tibble(a0 = coeficiente,
+                  n,
+                  n_Razon,
+                  cv_x = round(cv_x, digits = 3))
+  tabla
+  
+}
+
+
+tabla_tamano_de_muestra_Razon <- tamano_de_muestra_Razon(coeficiente = a0)
+kable(tabla_tamano_de_muestra_Razon, 
+      align = "cccc", 
+      caption = "Tamaño de muestra Razon con respecto al coeficiente de variacion")
+
+```
+
+
+```{r, fig.cap = "Grafico del cv(x) respecto al tamanio de muestra"}
+ggplot(tabla_tamano_de_muestra_Razon, aes(x = a0, y = cv_x)) +
+  geom_label(aes(label = cv_x), colour = "blue", fontface = "bold") +
+  geom_line() +
+  geom_hline(yintercept = 0.1, color = "red") +
+    annotate(
+    "text",
+    x = 0.15, y = 0.1,
+    label = "0.1 = limite de aceptacion del sesgo",
+    vjust = 1, size = 3, color = "red"
+  ) +
+  labs(x = "a0 = coeficiente de variacion",
+       y = "cv(x) = CoefVar de la variable auxiliar") +
+  theme_stata()
+             
+```
+
+
+```{r, fig.cap = "Grafico del tamano de muestra en Razon"}
+ggplot(tabla_tamano_de_muestra_Razon, aes(x = a0, y = n_Razon)) +
+  geom_label(aes(label = n_Razon), colour = "blue", fontface = "bold") +
+  geom_line() +
+  geom_hline(yintercept = 78, color = "red") +
+    annotate(
+    "text",
+    x = 0.1, y = 78,
+    label = "78 = Numero de conglomerados en la poblacion",
+    vjust = 1, size = 3, color = "red"
+  ) +
+  labs(x = "a0 = coeficiente de variacion",
+       y = "n = Tamano de la muestra") +
+  theme_stata()
+             
+```
+
+
+## Seleccion de las muestras
+
+```{r}
+
+data_muestra_Razon <- function(n, N = nrow(data_conglomerado)) {
+  
+  set.seed(123)
+  indice_Razon <- sample(1:N, size = n, replace = FALSE)
+  data_Razon <- data_conglomerado[indice_Razon,1:3]
+
+data_Razon
+
+}
+
+```
+
+
+## Resultados Razon
+
+```{r}
+
+data_67_Razon <- data_muestra_Razon(n = 67)
+data_48_Razon <- data_muestra_Razon(n = 48)
+data_32_Razon <- data_muestra_Razon(n = 32)
+
+```
+
+
+```{r}
+
+estimaciones_Razon <- function(data) {
+  tibble(total_est = total_est_Razon(data),
+        media_ele_est =med_mues_ele_Razon(data),
+        var_media_est = est_var_med_mues_el_Razon(data),
+        var_total_est= est_var_total_est_Razon(data))
+}
+
+```
+
+
+```{r}
+
+estimaciones_data_67_Razon <- estimaciones_Razon(data = data_67_Razon)
+estimaciones_data_48_Razon <- estimaciones_Razon(data = data_48_Razon)
+estimaciones_data_32_Razon <- estimaciones_Razon(data = data_32_Razon)
+
+```
+
+
+## Analisis del sesgo del estimador
+
+\[\frac{{\left| {B\left( {\hat R} \right)} \right|}}{{{\sigma _{\hat R}}}} = \frac{{\left| {{{ - Cov\left( {\hat R,\bar x} \right)} \mathord{\left/
+ {\vphantom {{ - Cov\left( {\hat R,\bar x} \right)} {\bar X}}} \right.
+ \kern-\nulldelimiterspace} {\bar X}}} \right|}}{{{\sigma _{\hat R}}}}\]
+
+
+```{r}
+
+sesgo_TotalEst_Razon <- function(data) {
+  M_raya <- sum(data_conglomerado$Mi) / nrow(data_conglomerado)
+
+  sesgo <- cov(data$Mi)
+  sesgo
+}
+
+
+relacion_sesgo_desv <- function(n) {
+
+  numerador <- sesgo_TotalEst_MediaMed()
+  a <- sum(data_conglomerado$Mi)^2
+  b <- ((1 / n) - (1 / nrow(data_conglomerado)))
+  c <- cuasivarianza_MediaMed(data = data_conglomerado)
+  denominador <- a * b * c
+  relacion <- abs(numerador) / sqrt(denominador)
+  relacion
+}
+
+```
+
+
+## Intervalo de confianza
+
+
+```{r}
+
+tabla_IC_media_Razon <- 
+  tibble(a0 = c(0.05, 0.10, 0.15),
+  n = c(67, 48, 32),
+  m0 = c(sum(data_67_Razon$Mi),
+         sum(data_48_Razon$Mi),
+         sum(data_32_Razon$Mi)),
+  media_ele = c(mean(data_elemento$Yij), 
+                mean(data_elemento$Yij), 
+                mean(data_elemento$Yij)),
+  media_ele_est = as.numeric(c(estimaciones_data_67_Razon[2],
+                               estimaciones_data_48_Razon[2],
+                               estimaciones_data_32_Razon[2])),
+  desv_media_est = sqrt(as.numeric(c(estimaciones_data_67_Razon[3],
+                                     estimaciones_data_48_Razon[3],
+                                     estimaciones_data_32_Razon[3]))))
+
+tabla_IC_media_Razon <-
+  tabla_IC_media_Razon %>%
+  mutate(IC_inferior = media_ele_est -
+           (qt(p = 1-(0.05/2), df = n - 1) * desv_media_est),
+         IC_superior = media_ele_est + 
+           (qt(p = 1-(0.05/2), df = n - 1) * desv_media_est),
+         coef_var_est = desv_media_est / media_ele_est,
+         cociente = abs(-cov(media_ele_est, m0 / n) / mean(data_conglomerado$Mi)) /
+            sqrt(varianza_Razon_est(n)))
+
+kable(tabla_IC_media_Razon)
+
+```
+
+
+```{r}
+
+tabla_IC_total_Razon <- 
+  tibble(a0 = c(0.05, 0.10, 0.15),
+  n = c(67, 48, 32),
+  m0 = c(sum(data_67_Razon$Mi),
+         sum(data_48_Razon$Mi),
+         sum(data_32_Razon$Mi)),
+  total = c(sum(data_conglomerado$Yi), 
+            sum(data_conglomerado$Yi), 
+            sum(data_conglomerado$Yi)),
+  total_est = as.numeric(c(estimaciones_data_67_Razon[1],
+                           estimaciones_data_48_Razon[1],
+                           estimaciones_data_32_Razon[1])),
+  desv_total_est = sqrt(as.numeric(c(estimaciones_data_67_Razon[4],
+                                     estimaciones_data_48_Razon[4],
+                                     estimaciones_data_32_Razon[4]))))
+
+tabla_IC_total_Razon <-
+  tabla_IC_total_Razon %>%
+  mutate(IC_inferior = total_est - 
+           (qt(p = 1-(0.05/2), df = n - 1) * desv_total_est),
+         IC_superior = total_est + 
+           (qt(p = 1-(0.05/2), df = n - 1) * desv_total_est),
+         coef_var_est = desv_total_est / total_est,
+         cociente = abs(-cov(total_est, m0 / n) / mean(data_conglomerado$Mi)) / 
+          (sum(data_conglomerado$Mi) * sqrt(varianza_Razon_est(n))))
+
+kable(tabla_IC_total_Razon)
+
+```
+
+
+# Conclusiones
+
+```{r}
+
+tabla_general <- tibble(a0 = c(c(0.05, 0.10, 0.15),
+                                     c(0.05, 0.10, 0.15),
+                                     c(0.05, 0.10, 0.15),
+                                     c(0.05, 0.10, 0.15)),
+                              tecnica = c(c("MASsr", "MASsr", "MASsr"),
+                                     c("MediaMedias", "MediaMedias", "MediaMedias"),
+                                     c("PPTcr", "PPTcr", "PPTcr"),
+                                     c("Razon", "Razon", "Razon")),
+                              n = c(tabla_IC_media_MASsr$n,
+                                     tabla_IC_media_MediaMed$n,
+                                     tabla_IC_media_PPTcr$n,
+                                     tabla_IC_media_Razon$n),
+                              media_muestral = c(tabla_IC_media_MASsr$media_ele_est,
+                                     tabla_IC_media_MediaMed$media_ele_est,
+                                     tabla_IC_media_PPTcr$media_ele_est,
+                                     tabla_IC_media_Razon$media_ele_est),
+                              total_estimado = c(tabla_IC_total_MASsr$total_est,
+                                     tabla_IC_total_MediaMed$total_est,
+                                     tabla_IC_total_PPTcr$total_est,
+                                     tabla_IC_total_Razon$total_est),
+                              CoefVar_est = c(tabla_IC_total_MASsr$coef_var_est,
+                                     tabla_IC_total_MediaMed$coef_var_est,
+                                     tabla_IC_total_PPTcr$coef_var_est,
+                                     tabla_IC_total_Razon$coef_var_est))
+
+kable(tabla_general)
+
+```
+
+
+```{r, fig.cap = "Grafico del tamano de muestras segun tecnicas"}
+ggplot(tabla_general, aes(x = a0, y = n, color = tecnica)) +
+  geom_text(aes(label = n), colour = "blue", fontface = "bold") +
+  geom_line() +
+    annotate(
+    "text",
+    x = 0.1, y = 78,
+    label = "78 = Numero de conglomerados en la poblacion",
+    vjust = 1, size = 3, color = "red"
+  ) +
+  geom_hline(yintercept = 78, color = "red") +
+  labs(x = "a0 = coeficiente de variacion",
+       y = "n = Tamano de la muestra") +
+  theme_stata()
+             
+```
+
+
+```{r, fig.cap = "Grafico del coef_var estimado segun tecnicas"}
+ggplot(tabla_general, aes(x = a0, y = round(CoefVar_est, digits = 2), color = tecnica)) +
+  geom_text(aes(label = round(CoefVar_est, digits = 2)),
+            colour = "blue", fontface = "bold") +
+  geom_line() +
+    annotate(
+    "text",
+    x = 0.075, y = 0.1,
+    label = "0.1 = limite aceptable",
+    vjust = 1, size = 5, color = "red"
+  ) +
+  geom_hline(yintercept = 0.1, color = "red") +
+  labs(x = "a0 = coeficiente de variacion",
+       y = "cv_est = coeficiente de variacion estimado") +
+  theme_stata()
+             
+```
+
+
